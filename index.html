@@ -635,7 +635,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   initSignature();
   checkDriveConfig();
-  checkAuthCallback(); // récupérer le token si retour d'auth Google
+  checkAuthCallback();
+  restoreToken(); // restaurer la connexion Drive si déjà connecté
 });
 
 // ─── Signature pad ─────────────────────────────────────────────
@@ -763,10 +764,25 @@ function checkAuthCallback() {
 
 function setDriveConnected(token) {
   driveToken = token;
+  // Sauvegarder le token pour qu'il persiste si on ferme et rouvre l'app
+  try { localStorage.setItem('fts_drive_token', token); } catch(e) {}
   document.getElementById('driveDot').className  = 'drive-dot connected';
   document.getElementById('driveLabel').textContent = '✓ Google Drive connecté';
   document.getElementById('btnDrive').style.display = 'none';
   showToast('✓ Google Drive connecté', 'success');
+}
+
+// Restaurer le token au chargement si disponible
+function restoreToken() {
+  try {
+    const saved = localStorage.getItem('fts_drive_token');
+    if (saved) {
+      driveToken = saved;
+      document.getElementById('driveDot').className  = 'drive-dot connected';
+      document.getElementById('driveLabel').textContent = '✓ Google Drive connecté';
+      document.getElementById('btnDrive').style.display = 'none';
+    }
+  } catch(e) {}
 }
 
 // ─── Validation & génération PDF ──────────────────────────────
@@ -1121,6 +1137,15 @@ async function uploadToDrive(blob, fileName) {
   });
   if (!res.ok) {
     const err = await res.json();
+    // Token expiré → effacer et demander reconnexion
+    if (err.error?.code === 401) {
+      try { localStorage.removeItem('fts_drive_token'); } catch(e) {}
+      driveToken = null;
+      document.getElementById('driveDot').className = 'drive-dot error';
+      document.getElementById('driveLabel').textContent = 'Drive : session expirée';
+      document.getElementById('btnDrive').style.display = '';
+      throw new Error('Session Drive expirée — reconnectez-vous via le bouton "Connecter Drive"');
+    }
     throw new Error(err.error?.message || 'Erreur Drive');
   }
 
