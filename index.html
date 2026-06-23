@@ -1081,26 +1081,30 @@ function drawCoche(doc, x, y, w, h, color) {
 async function uploadToDrive(blob, fileName) {
   showToast('⏳ Envoi sur Google Drive...', '');
 
-  // Reconstruction du nom de dossier chantier : "20 FTS 294 BORDEAUX LYCEE GUSTAVE EIFFEL"
   const dossier  = document.getElementById('dossier').value.trim().toUpperCase();
   const chantier = document.getElementById('chantier').value.trim().toUpperCase();
   const nomDossierChantier = [dossier, chantier].filter(Boolean).join(' ');
 
-  // 1. Chercher le dossier chantier existant à la racine du Drive
-  let chantierId = await findFolder(nomDossierChantier, 'root');
+  // 1. Chercher le dossier racine "DOSSIER CHANTIER"
+  let rootId = await findFolder('DOSSIER CHANTIER', 'root');
+  if (!rootId) throw new Error('Dossier "DOSSIER CHANTIER" introuvable sur Drive. Vérifiez le nom exact.');
 
-  // S'il n'existe pas encore, le créer (utile en phase de test)
-  if (!chantierId) {
-    chantierId = await createFolder(nomDossierChantier, 'root');
-  }
+  // 2. Chercher le dossier chantier ex: "25FTS914 LE BOUSCAT ROCH15"
+  let chantierId = await findFolder(nomDossierChantier, rootId);
+  if (!chantierId) throw new Error(`Dossier "${nomDossierChantier}" introuvable. Vérifiez que le nom correspond exactement au dossier Drive.`);
 
-  // 2. Trouver ou créer le sous-dossier RAPPORTS JOURNALIERS
-  let rapportsFolderId = await findFolder('RAPPORTS JOURNALIERS', chantierId);
+  // 3. Chercher le sous-dossier RAPPORT JOURNALIER
+  let rapportsFolderId = await findFolder('RAPPORT JOURNALIER', chantierId);
   if (!rapportsFolderId) {
-    rapportsFolderId = await createFolder('RAPPORTS JOURNALIERS', chantierId);
+    // Le créer s'il n'existe pas encore
+    rapportsFolderId = await createFolder('RAPPORT JOURNALIER', chantierId);
   }
 
-  // 3. Upload le PDF (nom simplifié : la date suffit, le chantier est dans le chemin)
+  // 4. Upload le PDF (écrase si même nom)
+  // Supprimer l'ancien fichier du même nom s'il existe
+  const oldFile = await findFile(fileName, rapportsFolderId);
+  if (oldFile) await deleteFile(oldFile);
+
   const metadata = {
     name: fileName,
     parents: [rapportsFolderId],
@@ -1123,20 +1127,39 @@ async function uploadToDrive(blob, fileName) {
   showToast('✅ Rapport enregistré sur Drive !', 'success');
 }
 
-// Cherche un dossier par nom exact dans un dossier parent — retourne l'id ou null
+// Cherche un dossier par nom exact dans un parent — retourne l'id ou null
 async function findFolder(name, parentId) {
   const q = `name='${name}' and mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents and trashed=false`;
   const res = await fetch(
-    `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name)`,
+    `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name)&includeItemsFromAllDrives=true&supportsAllDrives=true`,
     { headers: { Authorization: `Bearer ${driveToken}` } }
   );
   const data = await res.json();
   return (data.files && data.files.length > 0) ? data.files[0].id : null;
 }
 
+// Cherche un fichier par nom dans un dossier — retourne l'id ou null
+async function findFile(name, parentId) {
+  const q = `name='${name}' and '${parentId}' in parents and trashed=false`;
+  const res = await fetch(
+    `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id)&includeItemsFromAllDrives=true&supportsAllDrives=true`,
+    { headers: { Authorization: `Bearer ${driveToken}` } }
+  );
+  const data = await res.json();
+  return (data.files && data.files.length > 0) ? data.files[0].id : null;
+}
+
+// Supprime un fichier
+async function deleteFile(fileId) {
+  await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?supportsAllDrives=true`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${driveToken}` }
+  });
+}
+
 // Crée un dossier dans un parent — retourne l'id
 async function createFolder(name, parentId) {
-  const res = await fetch('https://www.googleapis.com/drive/v3/files', {
+  const res = await fetch('https://www.googleapis.com/drive/v3/files?supportsAllDrives=true', {
     method: 'POST',
     headers: { Authorization: `Bearer ${driveToken}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
