@@ -635,6 +635,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   initSignature();
   checkDriveConfig();
+  checkAuthCallback(); // récupérer le token si retour d'auth Google
 });
 
 // ─── Signature pad ─────────────────────────────────────────────
@@ -732,22 +733,32 @@ function checkDriveConfig() {
 
 function connectDrive() {
   if (GOOGLE_CLIENT_ID === 'VOTRE_CLIENT_ID') { showToast('⚠️ Client ID non configuré', 'error'); return; }
-  const url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GOOGLE_CLIENT_ID}&redirect_uri=${encodeURIComponent(location.origin + location.pathname)}&response_type=token&scope=${encodeURIComponent(SCOPES)}&prompt=consent`;
-  const w = window.open(url, 'driveAuth', 'width=500,height=600');
-  window.addEventListener('message', e => {
-    if (e.data && e.data.access_token) { setDriveConnected(e.data.access_token); w && w.close(); }
-  }, { once: true });
-  // Pour les hash token (implicit flow)
-  const check = setInterval(() => {
-    try {
-      if (w && w.location.hash) {
-        const params = new URLSearchParams(w.location.hash.slice(1));
-        const token  = params.get('access_token');
-        if (token) { setDriveConnected(token); w.close(); clearInterval(check); }
-      }
-    } catch(e) {}
-    if (!w || w.closed) clearInterval(check);
-  }, 500);
+  const REDIRECT_URI = 'https://conduc-fts.github.io/rapport';
+  const params = new URLSearchParams({
+    client_id:     GOOGLE_CLIENT_ID,
+    redirect_uri:  REDIRECT_URI,
+    response_type: 'token',
+    scope:         SCOPES,
+    prompt:        'consent',
+    include_granted_scopes: 'true',
+  });
+  const url = `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
+
+  // Ouvrir dans la même fenêtre — après auth Google redirige vers notre page avec le token dans l'URL
+  window.location.href = url;
+}
+
+// Récupérer le token si on revient d'une auth Google (hash dans l'URL)
+function checkAuthCallback() {
+  if (window.location.hash) {
+    const p = new URLSearchParams(window.location.hash.slice(1));
+    const token = p.get('access_token');
+    if (token) {
+      setDriveConnected(token);
+      // Nettoyer l'URL sans recharger la page
+      history.replaceState(null, '', window.location.pathname);
+    }
+  }
 }
 
 function setDriveConnected(token) {
