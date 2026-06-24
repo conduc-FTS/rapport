@@ -1103,7 +1103,7 @@ async function uploadToDrive(blob, fileName) {
 
   // 1. Chercher directement le dossier chantier ex: "25FTS914 LE BOUSCAT ROCH15"
   let chantierId = await findFolder(nomDossierChantier, 'root');
-  if (!chantierId) throw new Error(`Dossier "${nomDossierChantier}" introuvable. Vérifiez que le nom correspond exactement au dossier Drive.`);
+  if (!chantierId) throw new Error(`Dossier introuvable : "${nomDossierChantier}". Vérifiez que ce nom correspond exactement au dossier partagé sur Drive (majuscules, espaces).`);
 
   // 2. Chercher le sous-dossier RAPPORT JOURNALIER
   let rapportsFolderId = await findFolder('RAPPORT JOURNALIER', chantierId);
@@ -1152,18 +1152,16 @@ async function uploadToDrive(blob, fileName) {
 async function findFolder(name, parentId) {
   let q;
   if (parentId === 'root') {
-    // Sans restriction de parent pour chercher aussi dans les dossiers partagés
     q = `name='${name}' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
   } else {
     q = `name='${name}' and mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents and trashed=false`;
   }
   const res = await fetch(
-    `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name,parents)&includeItemsFromAllDrives=true&supportsAllDrives=true&corpora=allDrives`,
+    `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name)&includeItemsFromAllDrives=true&supportsAllDrives=true`,
     { headers: { Authorization: `Bearer ${driveToken}` } }
   );
   const data = await res.json();
   if (!data.files || data.files.length === 0) return null;
-  // Si plusieurs résultats, prendre le bon en vérifiant le nom exact
   const exact = data.files.find(f => f.name === name);
   return exact ? exact.id : data.files[0].id;
 }
