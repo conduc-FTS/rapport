@@ -541,6 +541,9 @@
     <button class="btn-drive-connect" id="btnDisconnect" onclick="disconnectDrive()" style="display:none;background:#888">
       Changer de compte
     </button>
+    <button class="btn-drive-connect" id="btnDebug" onclick="debugDrive()" style="display:none;background:#555;font-size:11px">
+      🔍 Debug
+    </button>
   </div>
 </div>
 
@@ -768,6 +771,7 @@ function setDriveConnected(token) {
   document.getElementById('driveLabel').textContent = '✓ Google Drive connecté';
   document.getElementById('btnDrive').style.display = 'none';
   document.getElementById('btnDisconnect').style.display = '';
+  document.getElementById('btnDebug').style.display = '';
   showToast('✓ Google Drive connecté', 'success');
 }
 
@@ -1148,6 +1152,25 @@ async function uploadToDrive(blob, fileName) {
     throw new Error(err.error?.message || 'Erreur Drive');
   }
   showToast('✅ Rapport enregistré sur Drive !', 'success');
+}
+
+// Debug : lister tous les dossiers accessibles
+async function debugDrive() {
+  try {
+    const res = await fetch(
+      `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent("mimeType='application/vnd.google-apps.folder' and trashed=false")}&fields=files(id,name,owners)&includeItemsFromAllDrives=true&supportsAllDrives=true&pageSize=20`,
+      { headers: { Authorization: `Bearer ${driveToken}` } }
+    );
+    const data = await res.json();
+    if (!data.files || data.files.length === 0) {
+      alert('Aucun dossier trouvé via l\'API Drive.\nVérifiez les permissions.');
+      return;
+    }
+    const noms = data.files.map(f => f.name).join('\n');
+    alert(`Dossiers accessibles (${data.files.length}) :\n\n${noms}`);
+  } catch(e) {
+    alert('Erreur debug : ' + e.message);
+  }
 }
 
 // Cherche le dossier chantier de façon flexible
