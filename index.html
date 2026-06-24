@@ -1101,15 +1101,11 @@ async function uploadToDrive(blob, fileName) {
   const chantier = document.getElementById('chantier').value.trim().toUpperCase();
   const nomDossierChantier = [dossier, chantier].filter(Boolean).join(' ');
 
-  // 1. Chercher le dossier racine "DOSSIER CHANTIER"
-  let rootId = await findFolder('DOSSIER CHANTIER', 'root');
-  if (!rootId) throw new Error('Dossier "DOSSIER CHANTIER" introuvable sur Drive. Vérifiez le nom exact.');
-
-  // 2. Chercher le dossier chantier ex: "25FTS914 LE BOUSCAT ROCH15"
-  let chantierId = await findFolder(nomDossierChantier, rootId);
+  // 1. Chercher directement le dossier chantier ex: "25FTS914 LE BOUSCAT ROCH15"
+  let chantierId = await findFolder(nomDossierChantier, 'root');
   if (!chantierId) throw new Error(`Dossier "${nomDossierChantier}" introuvable. Vérifiez que le nom correspond exactement au dossier Drive.`);
 
-  // 3. Chercher le sous-dossier RAPPORT JOURNALIER
+  // 2. Chercher le sous-dossier RAPPORT JOURNALIER
   let rapportsFolderId = await findFolder('RAPPORT JOURNALIER', chantierId);
   if (!rapportsFolderId) {
     // Le créer s'il n'existe pas encore
@@ -1152,9 +1148,15 @@ async function uploadToDrive(blob, fileName) {
   showToast('✅ Rapport enregistré sur Drive !', 'success');
 }
 
-// Cherche un dossier par nom exact dans un parent — retourne l'id ou null
+// Cherche un dossier par nom exact — dans tout le Drive accessible (y compris partagés)
 async function findFolder(name, parentId) {
-  const q = `name='${name}' and mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents and trashed=false`;
+  let q;
+  if (parentId === 'root') {
+    // Cherche dans tout le Drive accessible, pas seulement à la racine
+    q = `name='${name}' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
+  } else {
+    q = `name='${name}' and mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents and trashed=false`;
+  }
   const res = await fetch(
     `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name)&includeItemsFromAllDrives=true&supportsAllDrives=true`,
     { headers: { Authorization: `Bearer ${driveToken}` } }
