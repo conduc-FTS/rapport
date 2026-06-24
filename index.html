@@ -1152,17 +1152,20 @@ async function uploadToDrive(blob, fileName) {
 async function findFolder(name, parentId) {
   let q;
   if (parentId === 'root') {
-    // Cherche dans tout le Drive accessible, pas seulement à la racine
+    // Sans restriction de parent pour chercher aussi dans les dossiers partagés
     q = `name='${name}' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
   } else {
     q = `name='${name}' and mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents and trashed=false`;
   }
   const res = await fetch(
-    `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name)&includeItemsFromAllDrives=true&supportsAllDrives=true`,
+    `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name,parents)&includeItemsFromAllDrives=true&supportsAllDrives=true&corpora=allDrives`,
     { headers: { Authorization: `Bearer ${driveToken}` } }
   );
   const data = await res.json();
-  return (data.files && data.files.length > 0) ? data.files[0].id : null;
+  if (!data.files || data.files.length === 0) return null;
+  // Si plusieurs résultats, prendre le bon en vérifiant le nom exact
+  const exact = data.files.find(f => f.name === name);
+  return exact ? exact.id : data.files[0].id;
 }
 
 // Cherche un fichier par nom dans un dossier — retourne l'id ou null
