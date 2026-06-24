@@ -538,6 +538,9 @@
       <svg width="14" height="14" viewBox="0 0 24 24" fill="white"><path d="M6.18 15L3 20.5h18L17.82 15H6.18zm5.82-13L4.09 15h3.64L12 7l4.27 8H19.9L12 2z"/></svg>
       Connecter Drive
     </button>
+    <button class="btn-drive-connect" id="btnDisconnect" onclick="disconnectDrive()" style="display:none;background:#888">
+      Changer de compte
+    </button>
   </div>
 </div>
 
@@ -740,13 +743,10 @@ function connectDrive() {
     redirect_uri:  REDIRECT_URI,
     response_type: 'token',
     scope:         SCOPES,
-    prompt:        'consent',
+    prompt:        'select_account',
     include_granted_scopes: 'true',
   });
-  const url = `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
-
-  // Ouvrir dans la même fenêtre — après auth Google redirige vers notre page avec le token dans l'URL
-  window.location.href = url;
+  window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
 }
 
 // Récupérer le token si on revient d'une auth Google (hash dans l'URL)
@@ -756,7 +756,6 @@ function checkAuthCallback() {
     const token = p.get('access_token');
     if (token) {
       setDriveConnected(token);
-      // Nettoyer l'URL sans recharger la page
       history.replaceState(null, '', window.location.pathname);
     }
   }
@@ -764,12 +763,22 @@ function checkAuthCallback() {
 
 function setDriveConnected(token) {
   driveToken = token;
-  // Sauvegarder le token pour qu'il persiste si on ferme et rouvre l'app
   try { localStorage.setItem('fts_drive_token', token); } catch(e) {}
   document.getElementById('driveDot').className  = 'drive-dot connected';
   document.getElementById('driveLabel').textContent = '✓ Google Drive connecté';
   document.getElementById('btnDrive').style.display = 'none';
+  document.getElementById('btnDisconnect').style.display = '';
   showToast('✓ Google Drive connecté', 'success');
+}
+
+function disconnectDrive() {
+  driveToken = null;
+  try { localStorage.removeItem('fts_drive_token'); } catch(e) {}
+  document.getElementById('driveDot').className  = 'drive-dot';
+  document.getElementById('driveLabel').textContent = 'Google Drive : non connecté';
+  document.getElementById('btnDrive').style.display = '';
+  document.getElementById('btnDisconnect').style.display = 'none';
+  showToast('Déconnecté — reconnectez avec le bon compte', '');
 }
 
 // Restaurer le token au chargement si disponible
@@ -781,6 +790,7 @@ function restoreToken() {
       document.getElementById('driveDot').className  = 'drive-dot connected';
       document.getElementById('driveLabel').textContent = '✓ Google Drive connecté';
       document.getElementById('btnDrive').style.display = 'none';
+      document.getElementById('btnDisconnect').style.display = '';
     }
   } catch(e) {}
 }
