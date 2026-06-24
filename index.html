@@ -1097,26 +1097,25 @@ function drawCoche(doc, x, y, w, h, color) {
 async function uploadToDrive(blob, fileName) {
   showToast('⏳ Envoi sur Google Drive...', '');
 
-  const dossier  = document.getElementById('dossier').value.trim().toUpperCase();
-  const chantier = document.getElementById('chantier').value.trim().toUpperCase();
-  const nomDossierChantier = [dossier, chantier].filter(Boolean).join(' ');
+  // On cherche uniquement par le code chantier ex: "25FTS914"
+  const codeDossier = document.getElementById('dossier').value.trim().toUpperCase().replace(/\s+/g,'');
+  if (!codeDossier) throw new Error('Veuillez renseigner le N° de dossier avant d\'enregistrer.');
 
-  // 1. Chercher directement le dossier chantier ex: "25FTS914 LE BOUSCAT ROCH15"
-  let chantierId = await findFolder(nomDossierChantier, 'root');
-  if (!chantierId) throw new Error(`Dossier introuvable : "${nomDossierChantier}". Vérifiez que ce nom correspond exactement au dossier partagé sur Drive (majuscules, espaces).`);
+  // 1. Chercher le dossier dont le nom COMMENCE par le code chantier
+  let chantierId = await findFolderByCode(codeDossier);
+  if (!chantierId) throw new Error(`Dossier commençant par "${codeDossier}" introuvable sur Drive. Vérifiez que le dossier est bien partagé avec ce compte.`);
 
-  // 2. Chercher le sous-dossier RAPPORT JOURNALIER
+  // 2. Chercher ou créer le sous-dossier RAPPORT JOURNALIER
   let rapportsFolderId = await findFolder('RAPPORT JOURNALIER', chantierId);
   if (!rapportsFolderId) {
-    // Le créer s'il n'existe pas encore
     rapportsFolderId = await createFolder('RAPPORT JOURNALIER', chantierId);
   }
 
-  // 4. Upload le PDF (écrase si même nom)
-  // Supprimer l'ancien fichier du même nom s'il existe
+  // 3. Supprimer l'ancien fichier du même nom s'il existe (écrasement)
   const oldFile = await findFile(fileName, rapportsFolderId);
   if (oldFile) await deleteFile(oldFile);
 
+  // 4. Upload le PDF
   const metadata = {
     name: fileName,
     parents: [rapportsFolderId],
@@ -1126,14 +1125,14 @@ async function uploadToDrive(blob, fileName) {
   form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
   form.append('file', blob);
 
-  const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+  const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true', {
     method: 'POST',
     headers: { Authorization: `Bearer ${driveToken}` },
     body: form,
   });
+
   if (!res.ok) {
     const err = await res.json();
-    // Token expiré → effacer et demander reconnexion
     if (err.error?.code === 401) {
       try { localStorage.removeItem('fts_drive_token'); } catch(e) {}
       driveToken = null;
@@ -1148,25 +1147,32 @@ async function uploadToDrive(blob, fileName) {
   showToast('✅ Rapport enregistré sur Drive !', 'success');
 }
 
-// Cherche un dossier par nom exact — dans tout le Drive accessible (y compris partagés)
-async function findFolder(name, parentId) {
-  let q;
-  if (parentId === 'root') {
-    q = `name='${name}' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
-  } else {
-    q = `name='${name}' and mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents and trashed=false`;
-  }
+// Cherche un dossier dont le nom commence par le code chantier (ex: "25FTS914")
+async function findFolderByCode(code) {
+  const q = `name contains '${code}' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
   const res = await fetch(
     `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name)&includeItemsFromAllDrives=true&supportsAllDrives=true`,
     { headers: { Authorization: `Bearer ${driveToken}` } }
   );
   const data = await res.json();
   if (!data.files || data.files.length === 0) return null;
-  const exact = data.files.find(f => f.name === name);
-  return exact ? exact.id : data.files[0].id;
+  // Prendre le dossier dont le nom commence exactement par le code
+  const match = data.files.find(f => f.name.toUpperCase().startsWith(code));
+  return match ? match.id : data.files[0].id;
 }
 
-// Cherche un fichier par nom dans un dossier — retourne l'id ou null
+// Cherche un dossier par nom exact dans un parent
+async function findFolder(name, parentId) {
+  const q = `name='${name}' and mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents and trashed=false`;
+  const res = await fetch(
+    `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name)&includeItemsFromAllDrives=true&supportsAllDrives=true`,
+    { headers: { Authorization: `Bearer ${driveToken}` } }
+  );
+  const data = await res.json();
+  return (data.files && data.files.length > 0) ? data.files[0].id : null;
+}
+
+// Cherche un fichier par nom dans un dossier
 async function findFile(name, parentId) {
   const q = `name='${name}' and '${parentId}' in parents and trashed=false`;
   const res = await fetch(
@@ -1185,7 +1191,7 @@ async function deleteFile(fileId) {
   });
 }
 
-// Crée un dossier dans un parent — retourne l'id
+// Crée un dossier dans un parent
 async function createFolder(name, parentId) {
   const res = await fetch('https://www.googleapis.com/drive/v3/files?supportsAllDrives=true', {
     method: 'POST',
