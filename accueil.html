@@ -11,14 +11,7 @@
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <script>
 if ('serviceWorker' in navigator) {
-  const swCode = `
-    self.addEventListener('install', e => self.skipWaiting());
-    self.addEventListener('activate', e => e.waitUntil(clients.claim()));
-    self.addEventListener('fetch', e => e.respondWith(fetch(e.request).catch(() => caches.match(e.request))));
-  `;
-  const blob = new Blob([swCode], {type: 'application/javascript'});
-  const swUrl = URL.createObjectURL(blob);
-  navigator.serviceWorker.register(swUrl).catch(() => {});
+  navigator.serviceWorker.register('/rapport/sw_accueil.js').catch(() => {});
 }
 </script>
 <title>Accueil Intérimaire – FTS BTP</title>
