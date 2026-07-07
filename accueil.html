@@ -8,10 +8,10 @@
 <meta name="apple-mobile-web-app-title" content="Accueil FTS">
 <meta name="theme-color" content="#F5A800">
 <link rel="manifest" href="manifest_accueil.json">
-<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-accueil-192.png">
 <script>
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/rapport/sw_accueil.js').catch(() => {});
+  navigator.serviceWorker.register('/rapport/sw_accueil.js', {scope: '/rapport/accueil.html'}).catch(() => {});
 }
 </script>
 <title>Accueil Intérimaire – FTS BTP</title>
