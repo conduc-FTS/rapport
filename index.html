@@ -52,12 +52,7 @@
     gap: 10px;
     flex: 1;
   }
-  .logo-fts {
-    font-size: 22px;
-    font-weight: 900;
-    color: var(--blanc);
-    letter-spacing: -1px;
-  }
+  .logo-img { height: 38px; width: auto; display: block; }
   .logo-fts span { color: var(--jaune); }
   .app-title {
     font-size: 13px;
@@ -424,7 +419,7 @@
 <!-- HEADER -->
 <header class="app-header">
   <div class="logo-bar">
-    <div class="logo-fts">F<span>T</span>S</div>
+    <img id="headerLogo" class="logo-img" alt="FTS">
     <div class="app-title">Fondations & Travaux Spéciaux<br><strong style="color:#fff">Rapport Journalier</strong></div>
   </div>
   <button class="btn-valider" onclick="validerRapport()">
@@ -595,6 +590,7 @@ const sigCtx = document.getElementById('sigCanvas').getContext('2d');
 document.addEventListener('DOMContentLoaded', () => {
   // Date du jour par défaut
   document.getElementById('date').valueAsDate = new Date();
+  document.getElementById('headerLogo').src = LOGO_B64;
 
   // Forcer MAJUSCULES sur dossier et chantier (CSS ne suffit pas pour la valeur réelle)
   ['dossier','chantier'].forEach(id => {
